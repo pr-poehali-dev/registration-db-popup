@@ -34,6 +34,20 @@
         "success": true
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Request password reset",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "reset_password",
+        "email": "test@example.com"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }

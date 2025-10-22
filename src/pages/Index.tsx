@@ -10,12 +10,14 @@ interface User {
   id: number;
   email: string;
   full_name: string;
+  phone?: string;
+  bio?: string;
 }
 
 const API_URL = 'https://functions.poehali.dev/8f5ec37e-709a-4ca9-bfa0-616a89618a9e';
 
 export default function Index() {
-  const [view, setView] = useState<'login' | 'register' | 'home' | 'profile'>('login');
+  const [view, setView] = useState<'login' | 'register' | 'home' | 'profile' | 'edit-profile' | 'reset-password'>('login');
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,6 +30,19 @@ export default function Index() {
   const [loginData, setLoginData] = useState({
     email: '',
     password: ''
+  });
+
+  const [editProfileData, setEditProfileData] = useState({
+    full_name: '',
+    phone: '',
+    bio: ''
+  });
+
+  const [resetPasswordData, setResetPasswordData] = useState({
+    email: '',
+    token: '',
+    new_password: '',
+    step: 1
   });
 
   useEffect(() => {
@@ -120,6 +135,129 @@ export default function Index() {
     toast.success('Вы вышли из системы');
   };
 
+  const handleEditProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'update_profile', 
+          user_id: user.id,
+          ...editProfileData 
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setUser(data.user);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        toast.success('Успешно', {
+          description: 'Профиль обновлён!'
+        });
+        setView('profile');
+      } else {
+        toast.error('Ошибка', {
+          description: data.error || 'Не удалось обновить профиль'
+        });
+      }
+    } catch {
+      toast.error('Ошибка', {
+        description: 'Проблема с подключением к серверу'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'reset_password', 
+          email: resetPasswordData.email 
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success('Успешно', {
+          description: 'Токен для сброса пароля создан!'
+        });
+        setResetPasswordData({ 
+          ...resetPasswordData, 
+          token: data.token, 
+          step: 2 
+        });
+      } else {
+        toast.error('Ошибка', {
+          description: data.error || 'Не удалось создать запрос'
+        });
+      }
+    } catch {
+      toast.error('Ошибка', {
+        description: 'Проблема с подключением к серверу'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (resetPasswordData.new_password.length < 8) {
+      toast.error('Ошибка', {
+        description: 'Пароль должен содержать минимум 8 символов'
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'confirm_reset', 
+          token: resetPasswordData.token,
+          new_password: resetPasswordData.new_password
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success('Успешно', {
+          description: 'Пароль успешно изменён!'
+        });
+        setResetPasswordData({ email: '', token: '', new_password: '', step: 1 });
+        setView('login');
+      } else {
+        toast.error('Ошибка', {
+          description: data.error || 'Не удалось изменить пароль'
+        });
+      }
+    } catch {
+      toast.error('Ошибка', {
+        description: 'Проблема с подключением к серверу'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex items-center justify-center p-4">
       <div className="w-full max-w-6xl">
@@ -167,14 +305,24 @@ export default function Index() {
                 >
                   {loading ? 'Загрузка...' : 'Войти'}
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setView('register')}
-                  className="w-full hover:bg-purple-100 transition-colors"
-                >
-                  Нет аккаунта? Регистрация
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setView('register')}
+                    className="flex-1 hover:bg-purple-100 transition-colors"
+                  >
+                    Нет аккаунта? Регистрация
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setView('reset-password')}
+                    className="flex-1 hover:bg-blue-100 transition-colors text-sm"
+                  >
+                    Забыли пароль?
+                  </Button>
+                </div>
               </form>
             </CardContent>
           </Card>
@@ -338,23 +486,214 @@ export default function Index() {
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-4">
+              {user.phone && (
+                <div className="bg-gradient-to-r from-green-100 to-teal-100 p-6 rounded-xl animate-slide-in" style={{ animationDelay: '0.3s' }}>
+                  <Label className="text-sm text-gray-600 font-semibold">Телефон</Label>
+                  <p className="text-2xl font-bold text-gray-800 mt-1">{user.phone}</p>
+                </div>
+              )}
+
+              {user.bio && (
+                <div className="bg-gradient-to-r from-orange-100 to-yellow-100 p-6 rounded-xl animate-slide-in" style={{ animationDelay: '0.4s' }}>
+                  <Label className="text-sm text-gray-600 font-semibold">О себе</Label>
+                  <p className="text-lg text-gray-800 mt-1">{user.bio}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-4 pt-4">
                 <Button
                   onClick={() => setView('home')}
                   variant="outline"
-                  className="flex-1 border-2 hover:bg-purple-100 transition-all"
+                  className="border-2 hover:bg-purple-100 transition-all"
                 >
                   <Icon name="ArrowLeft" size={20} className="mr-2" />
                   Назад
                 </Button>
                 <Button
+                  onClick={() => {
+                    setEditProfileData({
+                      full_name: user.full_name,
+                      phone: user.phone || '',
+                      bio: user.bio || ''
+                    });
+                    setView('edit-profile');
+                  }}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white transition-all hover:scale-105"
+                >
+                  <Icon name="Edit" size={20} className="mr-2" />
+                  Редактировать
+                </Button>
+                <Button
                   onClick={handleLogout}
-                  className="flex-1 bg-gradient-to-r from-pink-600 to-red-600 hover:from-pink-700 hover:to-red-700 text-white transition-all hover:scale-105"
+                  className="bg-gradient-to-r from-pink-600 to-red-600 hover:from-pink-700 hover:to-red-700 text-white transition-all hover:scale-105"
                 >
                   <Icon name="LogOut" size={20} className="mr-2" />
                   Выйти
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {view === 'edit-profile' && user && (
+          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 backdrop-blur">
+            <CardHeader className="space-y-2 text-center">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-4 animate-fade-in">
+                <Icon name="Edit" className="text-white" size={32} />
+              </div>
+              <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Редактировать профиль
+              </CardTitle>
+              <CardDescription className="text-base">Обновите свою информацию</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleEditProfile} className="space-y-4">
+                <div className="space-y-2 animate-slide-in">
+                  <Label htmlFor="edit-name">Полное имя</Label>
+                  <Input
+                    id="edit-name"
+                    type="text"
+                    placeholder="Иван Иванов"
+                    value={editProfileData.full_name}
+                    onChange={(e) => setEditProfileData({ ...editProfileData, full_name: e.target.value })}
+                    className="border-2 focus:border-blue-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-2 animate-slide-in" style={{ animationDelay: '0.1s' }}>
+                  <Label htmlFor="edit-phone">Телефон (опционально)</Label>
+                  <Input
+                    id="edit-phone"
+                    type="tel"
+                    placeholder="+7 900 123-45-67"
+                    value={editProfileData.phone}
+                    onChange={(e) => setEditProfileData({ ...editProfileData, phone: e.target.value })}
+                    className="border-2 focus:border-blue-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-2 animate-slide-in" style={{ animationDelay: '0.2s' }}>
+                  <Label htmlFor="edit-bio">О себе (опционально)</Label>
+                  <Input
+                    id="edit-bio"
+                    type="text"
+                    placeholder="Расскажите о себе..."
+                    value={editProfileData.bio}
+                    onChange={(e) => setEditProfileData({ ...editProfileData, bio: e.target.value })}
+                    className="border-2 focus:border-blue-500 transition-all"
+                  />
+                </div>
+                <div className="flex gap-4 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setView('profile')}
+                    className="flex-1 border-2 hover:bg-gray-100"
+                  >
+                    Отмена
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold transition-all hover:scale-105"
+                  >
+                    {loading ? 'Сохранение...' : 'Сохранить'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {view === 'reset-password' && (
+          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 backdrop-blur">
+            <CardHeader className="space-y-2 text-center">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-orange-600 to-red-600 rounded-full flex items-center justify-center mb-4 animate-fade-in">
+                <Icon name="KeyRound" className="text-white" size={32} />
+              </div>
+              <CardTitle className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+                Восстановление пароля
+              </CardTitle>
+              <CardDescription className="text-base">
+                {resetPasswordData.step === 1 ? 'Введите ваш email' : 'Создайте новый пароль'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {resetPasswordData.step === 1 ? (
+                <form onSubmit={handleRequestReset} className="space-y-4">
+                  <div className="space-y-2 animate-slide-in">
+                    <Label htmlFor="reset-email">Email</Label>
+                    <Input
+                      id="reset-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={resetPasswordData.email}
+                      onChange={(e) => setResetPasswordData({ ...resetPasswordData, email: e.target.value })}
+                      required
+                      className="border-2 focus:border-orange-500 transition-all"
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold py-6 text-lg transition-all hover:scale-105"
+                  >
+                    {loading ? 'Загрузка...' : 'Получить токен'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setResetPasswordData({ email: '', token: '', new_password: '', step: 1 });
+                      setView('login');
+                    }}
+                    className="w-full hover:bg-gray-100 transition-colors"
+                  >
+                    Вернуться ко входу
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleConfirmReset} className="space-y-4">
+                  <div className="bg-green-50 border-2 border-green-200 p-4 rounded-lg animate-fade-in">
+                    <Label className="text-sm text-green-800 font-semibold">Ваш токен для сброса</Label>
+                    <p className="text-sm font-mono text-green-900 mt-2 break-all">{resetPasswordData.token}</p>
+                  </div>
+                  <div className="space-y-2 animate-slide-in">
+                    <Label htmlFor="new-password">Новый пароль (минимум 8 символов)</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={resetPasswordData.new_password}
+                      onChange={(e) => setResetPasswordData({ ...resetPasswordData, new_password: e.target.value })}
+                      required
+                      className="border-2 focus:border-orange-500 transition-all"
+                    />
+                    {resetPasswordData.new_password && resetPasswordData.new_password.length < 8 && (
+                      <p className="text-sm text-red-500 flex items-center gap-1">
+                        <Icon name="AlertCircle" size={16} />
+                        Пароль должен содержать минимум 8 символов
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={loading || resetPasswordData.new_password.length < 8}
+                    className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold py-6 text-lg transition-all hover:scale-105"
+                  >
+                    {loading ? 'Загрузка...' : 'Изменить пароль'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setResetPasswordData({ email: '', token: '', new_password: '', step: 1 });
+                      setView('login');
+                    }}
+                    className="w-full hover:bg-gray-100 transition-colors"
+                  >
+                    Отмена
+                  </Button>
+                </form>
+              )}
             </CardContent>
           </Card>
         )}
