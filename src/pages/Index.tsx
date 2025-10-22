@@ -12,14 +12,17 @@ interface User {
   full_name: string;
   phone?: string;
   bio?: string;
+  avatar_url?: string;
 }
 
 const API_URL = 'https://functions.poehali.dev/8f5ec37e-709a-4ca9-bfa0-616a89618a9e';
+const AVATAR_API_URL = 'https://functions.poehali.dev/db81d4c1-51a3-4b85-907b-eb1359c9d369';
 
 export default function Index() {
   const [view, setView] = useState<'login' | 'register' | 'home' | 'profile' | 'edit-profile' | 'reset-password'>('login');
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
 
   const [registerData, setRegisterData] = useState({
     email: '',
@@ -51,7 +54,69 @@ export default function Index() {
       setUser(JSON.parse(savedUser));
       setView('home');
     }
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      setDarkMode(true);
+      document.documentElement.classList.add('dark');
+    }
   }, []);
+
+  const toggleDarkMode = () => {
+    const newMode = !darkMode;
+    setDarkMode(newMode);
+    if (newMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user || !e.target.files || !e.target.files[0]) return;
+
+    const file = e.target.files[0];
+    const reader = new FileReader();
+
+    reader.onloadend = async () => {
+      const base64String = (reader.result as string).split(',')[1];
+      
+      setLoading(true);
+      try {
+        const response = await fetch(AVATAR_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            user_id: user.id,
+            avatar_data: base64String
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          setUser(data.user);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          toast.success('Успешно', {
+            description: 'Аватар обновлён!'
+          });
+        } else {
+          toast.error('Ошибка', {
+            description: data.error || 'Не удалось загрузить аватар'
+          });
+        }
+      } catch {
+        toast.error('Ошибка', {
+          description: 'Проблема с подключением к серверу'
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    reader.readAsDataURL(file);
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,12 +324,19 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-900 flex items-center justify-center p-4 transition-colors">
+      <Button
+        onClick={toggleDarkMode}
+        className="fixed top-4 right-4 z-50 bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 text-gray-800 dark:text-white border-2 border-gray-200 dark:border-gray-700 backdrop-blur shadow-lg"
+        size="icon"
+      >
+        <Icon name={darkMode ? 'Sun' : 'Moon'} size={20} />
+      </Button>
       <div className="w-full max-w-6xl">
         {view === 'login' && (
-          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 backdrop-blur">
+          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
             <CardHeader className="space-y-2 text-center">
-              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center mb-4 animate-fade-in">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center mb-4 animate-fade-in shadow-lg">
                 <Icon name="LogIn" className="text-white" size={32} />
               </div>
               <CardTitle className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
@@ -329,9 +401,9 @@ export default function Index() {
         )}
 
         {view === 'register' && (
-          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 backdrop-blur">
+          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
             <CardHeader className="space-y-2 text-center">
-              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-4 animate-fade-in">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-4 animate-fade-in shadow-lg">
                 <Icon name="UserPlus" className="text-white" size={32} />
               </div>
               <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -406,18 +478,29 @@ export default function Index() {
         {view === 'home' && user && (
           <div className="animate-fade-in">
             <div className="bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 rounded-3xl p-1 shadow-2xl">
-              <div className="bg-white rounded-3xl p-8">
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-8">
                 <div className="text-center mb-8">
+                  {user.avatar_url ? (
+                    <img 
+                      src={user.avatar_url} 
+                      alt="Avatar" 
+                      className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-purple-500 shadow-xl animate-scale-in object-cover"
+                    />
+                  ) : (
+                    <div className="w-24 h-24 rounded-full mx-auto mb-4 bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center text-white text-4xl font-bold shadow-xl animate-scale-in">
+                      {user.full_name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent animate-slide-in">
                     Добро пожаловать, {user.full_name}! 👋
                   </h1>
-                  <p className="text-xl text-gray-600 animate-fade-in">Вы успешно вошли в систему</p>
+                  <p className="text-xl text-gray-600 dark:text-gray-300 animate-fade-in">Вы успешно вошли в систему</p>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-6 mt-12">
-                  <Card className="hover:shadow-xl transition-all hover:scale-105 cursor-pointer border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 animate-scale-in">
+                  <Card className="hover:shadow-xl transition-all hover:scale-105 cursor-pointer border-2 border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 animate-scale-in">
                     <CardHeader>
-                      <div className="w-12 h-12 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center mb-3">
+                      <div className="w-12 h-12 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center mb-3 shadow-lg">
                         <Icon name="Home" className="text-white" size={24} />
                       </div>
                       <CardTitle className="text-2xl">Главная</CardTitle>
@@ -427,11 +510,11 @@ export default function Index() {
 
                   <Card
                     onClick={() => setView('profile')}
-                    className="hover:shadow-xl transition-all hover:scale-105 cursor-pointer border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-purple-50 animate-scale-in"
+                    className="hover:shadow-xl transition-all hover:scale-105 cursor-pointer border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 animate-scale-in"
                     style={{ animationDelay: '0.1s' }}
                   >
                     <CardHeader>
-                      <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-3">
+                      <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-3 shadow-lg">
                         <Icon name="User" className="text-white" size={24} />
                       </div>
                       <CardTitle className="text-2xl">Профиль</CardTitle>
@@ -441,11 +524,11 @@ export default function Index() {
 
                   <Card
                     onClick={handleLogout}
-                    className="hover:shadow-xl transition-all hover:scale-105 cursor-pointer border-2 border-pink-200 bg-gradient-to-br from-pink-50 to-red-50 animate-scale-in"
+                    className="hover:shadow-xl transition-all hover:scale-105 cursor-pointer border-2 border-pink-200 dark:border-pink-800 bg-gradient-to-br from-pink-50 to-red-50 dark:from-pink-900/30 dark:to-red-900/30 animate-scale-in"
                     style={{ animationDelay: '0.2s' }}
                   >
                     <CardHeader>
-                      <div className="w-12 h-12 bg-gradient-to-r from-pink-600 to-red-600 rounded-full flex items-center justify-center mb-3">
+                      <div className="w-12 h-12 bg-gradient-to-r from-pink-600 to-red-600 rounded-full flex items-center justify-center mb-3 shadow-lg">
                         <Icon name="LogOut" className="text-white" size={24} />
                       </div>
                       <CardTitle className="text-2xl">Выход</CardTitle>
@@ -459,10 +542,33 @@ export default function Index() {
         )}
 
         {view === 'profile' && user && (
-          <Card className="max-w-2xl mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 backdrop-blur">
+          <Card className="max-w-2xl mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
             <CardHeader className="space-y-4 text-center">
-              <div className="mx-auto w-24 h-24 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-4 animate-fade-in">
-                <Icon name="UserCircle" className="text-white" size={48} />
+              <div className="relative mx-auto w-24 h-24 mb-4 animate-fade-in">
+                {user.avatar_url ? (
+                  <img 
+                    src={user.avatar_url} 
+                    alt="Avatar" 
+                    className="w-24 h-24 rounded-full border-4 border-purple-500 shadow-xl object-cover"
+                  />
+                ) : (
+                  <div className="w-24 h-24 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center shadow-xl">
+                    <Icon name="UserCircle" className="text-white" size={48} />
+                  </div>
+                )}
+                <label 
+                  htmlFor="avatar-upload" 
+                  className="absolute bottom-0 right-0 w-8 h-8 bg-purple-600 hover:bg-purple-700 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-all hover:scale-110"
+                >
+                  <Icon name="Camera" className="text-white" size={16} />
+                  <input 
+                    id="avatar-upload" 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={handleAvatarUpload}
+                  />
+                </label>
               </div>
               <CardTitle className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 Профиль пользователя
@@ -536,9 +642,9 @@ export default function Index() {
         )}
 
         {view === 'edit-profile' && user && (
-          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 backdrop-blur">
+          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
             <CardHeader className="space-y-2 text-center">
-              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-4 animate-fade-in">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-4 animate-fade-in shadow-lg">
                 <Icon name="Edit" className="text-white" size={32} />
               </div>
               <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -604,9 +710,9 @@ export default function Index() {
         )}
 
         {view === 'reset-password' && (
-          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 backdrop-blur">
+          <Card className="max-w-md mx-auto animate-scale-in shadow-2xl border-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
             <CardHeader className="space-y-2 text-center">
-              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-orange-600 to-red-600 rounded-full flex items-center justify-center mb-4 animate-fade-in">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-orange-600 to-red-600 rounded-full flex items-center justify-center mb-4 animate-fade-in shadow-lg">
                 <Icon name="KeyRound" className="text-white" size={32} />
               </div>
               <CardTitle className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">

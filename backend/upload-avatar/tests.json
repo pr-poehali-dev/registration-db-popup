@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "name": "Upload avatar",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "user_id": 1,
+        "avatar_data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

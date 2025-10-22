@@ -90,10 +90,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             password_hash = hash_password(register_req.password)
             cur.execute(
-                "INSERT INTO users (email, password_hash, full_name) VALUES (%s, %s, %s) RETURNING id",
+                "INSERT INTO users (email, password_hash, full_name) VALUES (%s, %s, %s) RETURNING id, email, full_name, phone, bio, avatar_url",
                 (register_req.email, password_hash, register_req.full_name)
             )
-            user_id = cur.fetchone()[0]
+            user = cur.fetchone()
             conn.commit()
             cur.close()
             conn.close()
@@ -108,9 +108,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'body': json.dumps({
                     'success': True,
                     'user': {
-                        'id': user_id,
-                        'email': register_req.email,
-                        'full_name': register_req.full_name
+                        'id': user[0],
+                        'email': user[1],
+                        'full_name': user[2],
+                        'phone': user[3],
+                        'bio': user[4],
+                        'avatar_url': user[5]
                     }
                 })
             }
@@ -319,7 +322,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             password_hash = hash_password(login_req.password)
             cur.execute(
-                "SELECT id, email, full_name, phone, bio FROM users WHERE email = %s AND password_hash = %s",
+                "SELECT id, email, full_name, phone, bio, avatar_url FROM users WHERE email = %s AND password_hash = %s",
                 (login_req.email, password_hash)
             )
             user = cur.fetchone()
@@ -351,7 +354,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         'email': user[1],
                         'full_name': user[2],
                         'phone': user[3],
-                        'bio': user[4]
+                        'bio': user[4],
+                        'avatar_url': user[5]
                     }
                 })
             }
